@@ -22,10 +22,10 @@ btn_start.pack(pady=10)
 btn_stop = ctk.CTkButton(root, text="Stop Camera", state="disabled")
 btn_stop.pack(pady=10)
 
-# Inisialisasi ukuran layar
+# Ukuran layar
 screen_width, screen_height = pyautogui.size()
 
-# Inisialisasi modul MediaPipe Hands
+# MediaPipe Hands
 mpHands = mp.solutions.hands
 hands = mpHands.Hands(
     static_image_mode=False,
@@ -36,13 +36,18 @@ hands = mpHands.Hands(
 )
 mpDraw = mp.solutions.drawing_utils
 
+# Variabel global
 clicking_left = False
 clicking_right = False
 scrolling = False
-double_clicking = False
 prev_scroll_y = None
 last_scroll_time = 0
-scroll_delay = 0.1
+double_clicking = False
+
+# Scroll setting
+scroll_threshold = 45
+scroll_min_move = 15
+scroll_delay = 0.15
 
 camera_running = False
 cap = None
@@ -80,29 +85,41 @@ def detect_gestures(frame, landmarks_list, processed):
     dist_thumb_index = get_distance(thumb_tip, index_tip)
     dist_thumb_middle = get_distance(thumb_tip, middle_tip)
     dist_index_middle = get_distance(index_tip, middle_tip)
-    dist_index_ring = get_distance(index_tip, ring_tip)
+    dist_thumb_ring = get_distance(thumb_tip, ring_tip)
 
     index_finger_tip = find_finger_tip(processed, mpHands.HandLandmark.INDEX_FINGER_TIP)
     if index_finger_tip is not None:
         move_mouse(index_finger_tip)
 
+    # Klik kiri
     if dist_thumb_index < 40:
         if not clicking_left:
+            print("[GESTURE] Klik kiri!")
             pyautogui.click(button='left')
             clicking_left = True
             label_status.configure(text="Status: Klik Kiri")
     else:
         clicking_left = False
 
+    # Klik kanan
     if dist_thumb_middle < 40:
         if not clicking_right:
+            print("[GESTURE] Klik kanan!")
             pyautogui.click(button='right')
             clicking_right = True
             label_status.configure(text="Status: Klik Kanan")
     else:
         clicking_right = False
 
-    if dist_index_middle < 40:
+    # Double click: jempol menyentuh jari manis
+    if dist_thumb_ring < 40:
+        print("[GESTURE] Double Click!")
+        pyautogui.doubleClick()
+        label_status.configure(text="Status: Double Klik")
+        time.sleep(0.5)
+
+    # Scroll
+    if dist_index_middle < scroll_threshold:
         if not scrolling:
             scrolling = True
             prev_scroll_y = index_tip[1]
@@ -111,7 +128,8 @@ def detect_gestures(frame, landmarks_list, processed):
             if (now - last_scroll_time) > scroll_delay:
                 dy = index_tip[1] - prev_scroll_y
                 scroll_amount = int(dy * -10)
-                if abs(scroll_amount) > 5:
+                if abs(dy) > scroll_min_move:
+                    print(f"[GESTURE] Scroll: {scroll_amount}")
                     pyautogui.scroll(scroll_amount)
                     prev_scroll_y = index_tip[1]
                     last_scroll_time = now
@@ -119,11 +137,6 @@ def detect_gestures(frame, landmarks_list, processed):
     else:
         scrolling = False
         prev_scroll_y = None
-
-    if dist_index_ring < 40:
-        pyautogui.doubleClick()
-        label_status.configure(text="Status: Double Klik")
-        time.sleep(0.5)
 
 def camera_loop():
     global camera_running, cap
@@ -151,7 +164,6 @@ def camera_loop():
     cap.release()
     cv2.destroyAllWindows()
     label_status.configure(text="Status: Kamera Dimatikan")
-
 
 def start_camera():
     btn_start.configure(state="disabled")
